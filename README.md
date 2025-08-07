@@ -1,178 +1,84 @@
-Based on your three Python files, here's a comprehensive GitHub README for your RAG (Retrieval-Augmented Generation) system with voice capabilities:
+## Script Descriptions and Core Functionality
 
-```markdown
-# PDF RAG System with Voice Integration
+This project features three main Python scripts that together implement a voice-enabled PDF Retrieval-Augmented Generation (RAG) pipeline. Here’s a detailed description of each script—their most important functions, and an explanation of how the system operates from data ingestion to interactive querying.
 
-A Retrieval-Augmented Generation (RAG) system that allows you to query PDF documents using both text and voice input, with text-to-speech response capabilities. Built with LangChain, ChromaDB, and Ollama.
+### 1. **populate_database.py**
+**Purpose:**  
+Processes and indexes PDF documents for retrieval by splitting text into semantic chunks, generating vector embeddings, and storing them in a ChromaDB vector database.
 
-## Features
+**Key Components:**
+- **Arguments**:  
+  - `--reset`: Optional. Resets/clears the database directory before re-population.
 
-- 🔍 **PDF Document Processing**: Automatically load and process PDF documents from a directory
-- 🧠 **Vector Database**: Store document embeddings using ChromaDB for efficient similarity search
-- 🎤 **Voice Input**: Ask questions using speech-to-text functionality
-- 🔊 **Text-to-Speech**: Get spoken responses to your queries
-- 📝 **Text Input**: Traditional text-based querying
-- 🔄 **Incremental Updates**: Add new documents without duplicating existing ones
-- 🧹 **Database Management**: Reset/clear database functionality
+- **Functions:**
+  - `main()`: Entry point.
+    - Checks for the `--reset` flag to optionally clear the database.
+    - Loads PDFs, splits them into chunks, computes embeddings, and adds only new chunks to the ChromaDB database.
+  - `load_documents()`: Loads all PDF files from the `data/` directory using LangChain’s PDF loader.
+  - `split_documents(documents)`: Uses `RecursiveCharacterTextSplitter` to break documents into text chunks (default: 800 characters, 80 overlap).
+  - `calculate_chunk_ids(chunks)`: Assigns each chunk a unique deterministic ID (format: `source:page:chunk_index`), enabling deduplication and incremental updates.
+  - `add_to_chroma(chunks)`: 
+    - Initializes the ChromaDB vector store with the configured embedding function.
+    - Checks for chunks not yet present in the database.
+    - Adds only genuinely new chunks for efficiency.
+  - `clear_database()`: Removes all files from the vector store directory to allow complete re-population.
 
-## Prerequisites
+**How it works:**  
+Runs as a one-off data preparation utility. Place PDFs in the `data/` subdirectory, then execute the script to build or incrementally update the vector store that powers the search capabilities.
 
-- Python 3.8+
-- Ollama installed and running
-- Required Ollama models:
-  - `llama3.2` (for text generation)
-  - `nomic-embed-text` (for embeddings)
+### 2. **query_data.py**
+**Purpose:**  
+Enables querying of the indexed PDF database using both text and voice. Delivers answers as text and/or spoken output, using Retrieval-Augmented Generation via LLM and TTS technology.
 
-## Installation
+**Key Components:**
+- **Arguments**:
+  - `--voice`: Launches voice query mode.
+  - `query_text`: (Positional) Query using text input.
+  
+- **Functions:**
+  - `main()`: Orchestrates user interaction. Runs in either text or voice mode.
+  - `query_rag(query_text)`:  
+    - Fetches the ChromaDB with the proper embedding function.
+    - Performs similarity search to get the most relevant chunks.
+    - Composes a custom prompt with the chunks as retrieval context for the LLM.
+    - Uses Ollama’s local model (`llama3.2`) for answer generation.
+    - Returns the model’s response along with document source chunk IDs.
+  - `speak_response(text)`: Uses `pyttsx3` for text-to-speech synthesis—selecting English voices if available.
+  - `get_voice_input()`: Captures and transcribes a single user question using `RealtimeSTT` in “medium” recognition mode (English).
 
-1. Clone this repository:
-```
-git clone 
-cd pdf-rag-voice-system
-```
+**How it works:**  
+Run the script directly.  
+- **Text mode:** `python query_data.py "your question"`—get spoken answer.
+- **Voice mode:** `python query_data.py --voice`—speak your question, listen to the answer.  
+All responses are retrieved from indexed PDF content.
 
-2. Install required dependencies:
-```
-pip install langchain langchain-community langchain-text-splitters chromadb pypdf pyttsx3 RealtimeSTT argparse
-```
+### 3. **get_embedding_function.py**
+**Purpose:**  
+Centralizes vector embedding model configuration, making it easy to switch or standardize embedding providers.
 
-3. Install and start Ollama:
-```
-# Install Ollama (follow instructions at https://ollama.ai)
-ollama pull llama3.2
-ollama pull nomic-embed-text
-```
+**Key Component:**
+- **Function:**
+  - `get_embedding_function()`: Returns an instance of Ollama’s embedding model wrapper, using the `nomic-embed-text` model, configured for the RAG pipeline.
 
-## Project Structure
+**How it works:**  
+Used internally by both `populate_database.py` and `query_data.py` to ensure consistent embeddings for both indexing and querying.
 
-```
-├── populate_database.py    # Database population and management
-├── query_data.py          # Query interface with voice capabilities
-├── get_embedding_function.py  # Embedding configuration
-├── data/                  # Directory for PDF files
-└── chroma/               # ChromaDB storage (auto-created)
-```
+## System Workflow Overview
 
-## Usage
+1. **Ingestion/Indexing:**  
+   - Place PDFs in the `data/` directory.
+   - Run `populate_database.py` to generate and store chunked vector embeddings.
 
-### 1. Populate the Database
+2. **Interactive Retrieval:**
+   - Run `query_data.py` for user queries (either typed or spoken).
+   - Script retrieves relevant PDF chunks via vector similarity, forms a context/QA prompt for an LLM, and returns/generated answers as speech and text.
 
-Place your PDF files in the `data/` directory, then run:
+## Most Important Functions – At a Glance
 
-```
-# Initial population
-python populate_database.py
+| Script                  | Key Function(s)             | What It Does                                                                        |
+|-------------------------|-----------------------------|-------------------------------------------------------------------------------------|
+| populate_database.py    | `main`, `split_documents`, `add_to_chroma`, `calculate_chunk_ids` | Reads, splits, embeds, ID-tags, and stores document chunks incrementally            |
+| query_data.py           | `main`, `query_rag`, `get_voice_input`, `speak_response`          | Runs interactive QA pipeline: similarity search, LLM prompt, TTS answer             |
+| get_embedding_function.py| `get_embedding_function`   | Returns standardized embedding model instance for retrieval pipeline                 |
 
-# Reset database and repopulate
-python populate_database.py --reset
-```
-
-### 2. Query the System
-
-#### Text Input with Spoken Response:
-```
-python query_data.py "What is the main topic of the document?"
-```
-
-#### Voice Input:
-```
-python query_data.py --voice
-```
-
-## Configuration
-
-### Document Processing
-- **Chunk Size**: 800 characters
-- **Chunk Overlap**: 80 characters
-- **Similarity Search**: Top 3 most relevant chunks
-
-### Voice Settings
-- **STT Model**: Medium accuracy model
-- **Language**: English
-- **TTS**: Configurable voice selection with English preference
-- **Speech Rate**: 150 WPM
-
-### Embedding Model
-The system uses Ollama's `nomic-embed-text` model for generating embeddings. You can modify this in `get_embedding_function.py`.
-
-## File Descriptions
-
-### `populate_database.py`
-- Loads PDF documents from the `data/` directory
-- Splits documents into chunks using RecursiveCharacterTextSplitter
-- Stores embeddings in ChromaDB with unique chunk IDs
-- Supports incremental updates (only adds new documents)
-
-### `query_data.py`
-- Provides text and voice query interfaces
-- Performs similarity search against the vector database
-- Uses Ollama's LLaMA 3.2 for response generation
-- Includes text-to-speech functionality
-
-### `get_embedding_function.py`
-- Configures the embedding model (Ollama nomic-embed-text)
-- Centralized embedding function for consistency
-
-## Customization
-
-### Change the LLM Model
-Modify the model in `query_data.py`:
-```
-model = Ollama(model="your-preferred-model")
-```
-
-### Adjust Chunk Settings
-Edit parameters in `populate_database.py`:
-```
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,  # Increase for larger chunks
-    chunk_overlap=100,  # Adjust overlap
-    # ...
-)
-```
-
-### Modify Voice Settings
-Update voice parameters in `query_data.py`:
-```
-recorder = AudioToTextRecorder(
-    model="large",  # Use larger STT model
-    language="en",
-    # ... other settings
-)
-```
-
-## Troubleshooting
-
-### Common Issues:
-1. **Ollama not running**: Ensure Ollama is installed and the required models are pulled
-2. **No microphone access**: Check system permissions for microphone usage
-3. **TTS not working**: Verify pyttsx3 installation and system audio settings
-4. **Database errors**: Try resetting with `--reset` flag
-
-### Dependencies Issues:
-If you encounter import errors, ensure all packages are installed:
-```
-pip install --upgrade langchain langchain-community chromadb
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## Acknowledgments
-
-- Built with [LangChain](https://langchain.com/)
-- Vector storage by [ChromaDB](https://www.trychroma.com/)
-- LLM inference by [Ollama](https://ollama.ai)
-- Voice processing with RealtimeSTT and pyttsx3
-```
-
-This README provides a comprehensive overview of your RAG system, including installation instructions, usage examples, and customization options. It's structured to help users quickly understand and implement your voice-enabled PDF querying system.
+This modular setup ensures efficient document indexing, robust retrieval, and seamless voice interaction—all essential for a user-friendly, locally-operated RAG solution for PDF search and Q&A.
